@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Comments from './Comments';
 
 interface Video {
   id: string;
@@ -10,11 +11,10 @@ interface Video {
   duration?: string;
 }
 
-// Fallback videos based on the actual channel content shown in the screenshots
-const FALLBACK_VIDEOS: Video[] = [
+const DEFAULT_FALLBACK_VIDEOS: Video[] = [
   {
     id: 'dQw4w9WgXcQ',
-    title: 'My Final Predictions for GTA 6 Tr...',
+    title: 'My Final Predictions for GTA 6 Trailer 3',
     description: 'Breaking down all the evidence and making my final predictions for the GTA 6 Trailer 3 release. Could it drop in April or May 2026?',
     thumbnail: `https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg`,
     publishedAt: new Date(Date.now() - 3600000).toISOString(),
@@ -24,7 +24,7 @@ const FALLBACK_VIDEOS: Video[] = [
   {
     id: 'oHg5SJYRHA0',
     title: 'GTA 6 NEEDS This Feature',
-    description: 'There is one feature that GTA 6 absolutely NEEDS to include. Here is why it will completely change the game.',
+    description: 'There is one feature that GTA 6 absolutely NEEDS to include.',
     thumbnail: `https://i.ytimg.com/vi/oHg5SJYRHA0/hqdefault.jpg`,
     publishedAt: new Date(Date.now() - 10800000).toISOString(),
     viewCount: '549',
@@ -33,7 +33,7 @@ const FALLBACK_VIDEOS: Video[] = [
   {
     id: 'aBcDeFgHiJk',
     title: 'GTA 6 Map LEAKED – Everything We Know',
-    description: 'The GTA 6 map leaks are getting more detailed. Here is a complete breakdown of every confirmed location in Vice City and beyond.',
+    description: 'The GTA 6 map leaks are getting more detailed.',
     thumbnail: `https://i.ytimg.com/vi/aBcDeFgHiJk/hqdefault.jpg`,
     publishedAt: new Date(Date.now() - 86400000).toISOString(),
     viewCount: '1.2K',
@@ -42,7 +42,7 @@ const FALLBACK_VIDEOS: Video[] = [
   {
     id: 'xYzAbCdEfGh',
     title: "Rockstar's SECRET Plans for GTA Online After GTA 6",
-    description: "What happens to GTA Online when GTA 6 drops? We break down Rockstar rumored plans and what it means for the community.",
+    description: "What happens to GTA Online when GTA 6 drops?",
     thumbnail: `https://i.ytimg.com/vi/xYzAbCdEfGh/hqdefault.jpg`,
     publishedAt: new Date(Date.now() - 172800000).toISOString(),
     viewCount: '892',
@@ -51,7 +51,7 @@ const FALLBACK_VIDEOS: Video[] = [
   {
     id: 'mNoPqRsTuVw',
     title: 'GTA 6 Release Date – The Truth Revealed',
-    description: 'Rockstar has dropped hints everywhere. Let us decode all the clues and figure out the REAL GTA 6 release date window.',
+    description: "Let us decode all the clues and figure out the REAL GTA 6 release date window.",
     thumbnail: `https://i.ytimg.com/vi/mNoPqRsTuVw/hqdefault.jpg`,
     publishedAt: new Date(Date.now() - 259200000).toISOString(),
     viewCount: '3.4K',
@@ -60,7 +60,7 @@ const FALLBACK_VIDEOS: Video[] = [
   {
     id: 'iJkLmNoPqRs',
     title: 'Every GTA 6 Easter Egg Found So Far',
-    description: 'A complete roundup of every easter egg and hidden detail found in the GTA 6 trailer. Some of these are absolutely mind-blowing.',
+    description: 'A complete roundup of every easter egg found in the GTA 6 trailer.',
     thumbnail: `https://i.ytimg.com/vi/iJkLmNoPqRs/hqdefault.jpg`,
     publishedAt: new Date(Date.now() - 345600000).toISOString(),
     viewCount: '2.1K',
@@ -69,15 +69,12 @@ const FALLBACK_VIDEOS: Video[] = [
 ];
 
 function formatTimeAgo(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diff = now - then;
+  const diff = Date.now() - new Date(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
   const weeks = Math.floor(days / 7);
   const months = Math.floor(days / 30);
-
   if (minutes < 60) return `${minutes}m ago`;
   if (hours < 24) return `${hours}h ago`;
   if (days < 7) return `${days}d ago`;
@@ -94,20 +91,37 @@ function formatViewCount(count?: string): string {
   return count;
 }
 
-function VideoCard({ video, featured = false }: { video: Video; featured?: boolean }) {
+function getAdminVideos(): Video[] {
+  try {
+    return JSON.parse(localStorage.getItem('rageintel_videos') || '[]');
+  } catch { return []; }
+}
+
+function VideoCard({
+  video,
+  featured = false,
+  onAuthRequired,
+}: {
+  video: Video;
+  featured?: boolean;
+  onAuthRequired: () => void;
+}) {
   const [imgError, setImgError] = useState(false);
+  const [showComments, setShowComments] = useState(false);
 
   return (
-    <a
-      href={`https://www.youtube.com/watch?v=${video.id}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`group block bg-zinc-900/80 border border-zinc-800 hover:border-yellow-400/50 rounded-lg overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-yellow-400/10 ${
+    <div
+      className={`group bg-zinc-900/80 border border-zinc-800 hover:border-yellow-400/50 rounded-lg overflow-hidden transition-all duration-300 ${
         featured ? 'col-span-full md:col-span-2' : ''
       }`}
     >
       {/* Thumbnail */}
-      <div className={`relative overflow-hidden bg-zinc-800 ${featured ? 'aspect-video' : 'aspect-video'}`}>
+      <a
+        href={`https://www.youtube.com/watch?v=${video.id}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block relative overflow-hidden bg-zinc-800 aspect-video"
+      >
         {!imgError ? (
           <img
             src={video.thumbnail}
@@ -123,15 +137,11 @@ function VideoCard({ video, featured = false }: { video: Video; featured?: boole
             </svg>
           </div>
         )}
-
-        {/* Duration badge */}
         {video.duration && (
           <div className="absolute bottom-2 right-2 bg-black/90 text-white text-xs font-bold px-1.5 py-0.5 rounded font-rajdhani">
             {video.duration}
           </div>
         )}
-
-        {/* Play overlay */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
           <div className="w-14 h-14 rounded-full bg-red-600/90 flex items-center justify-center shadow-xl shadow-red-600/40 transform scale-75 group-hover:scale-100 transition-transform duration-300">
             <svg viewBox="0 0 24 24" fill="white" className="w-6 h-6 ml-1">
@@ -139,20 +149,24 @@ function VideoCard({ video, featured = false }: { video: Video; featured?: boole
             </svg>
           </div>
         </div>
-
-        {/* NEW badge for very recent */}
         {new Date(video.publishedAt).getTime() > Date.now() - 86400000 * 3 && (
           <div className="absolute top-2 left-2 bg-yellow-400 text-black text-xs font-orbitron font-bold px-2 py-0.5 rounded-sm uppercase tracking-wider">
             New
           </div>
         )}
-      </div>
+      </a>
 
       {/* Info */}
       <div className="p-4">
-        <h3 className={`font-rajdhani font-bold text-white group-hover:text-yellow-400 transition-colors duration-200 leading-snug line-clamp-2 ${featured ? 'text-xl' : 'text-base'}`}>
-          {video.title}
-        </h3>
+        <a
+          href={`https://www.youtube.com/watch?v=${video.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <h3 className={`font-rajdhani font-bold text-white hover:text-yellow-400 transition-colors duration-200 leading-snug line-clamp-2 cursor-pointer ${featured ? 'text-xl' : 'text-base'}`}>
+            {video.title}
+          </h3>
+        </a>
 
         {featured && (
           <p className="text-gray-400 text-sm mt-2 line-clamp-2 font-inter leading-relaxed">
@@ -169,71 +183,83 @@ function VideoCard({ video, featured = false }: { video: Video; featured?: boole
             </div>
             <span className="font-rajdhani text-gray-400 text-xs font-semibold uppercase tracking-wider">RAGE Intel</span>
           </div>
-
           <span className="text-gray-600 text-xs">•</span>
           <span className="text-gray-500 text-xs font-inter">{formatTimeAgo(video.publishedAt)}</span>
-
           {video.viewCount && (
             <>
               <span className="text-gray-600 text-xs">•</span>
               <span className="text-gray-500 text-xs font-inter">{formatViewCount(video.viewCount)} views</span>
             </>
           )}
+
+          {/* Comments toggle */}
+          <button
+            onClick={() => setShowComments(s => !s)}
+            className="ml-auto flex items-center gap-1 text-gray-600 hover:text-yellow-400 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            <span className="text-xs font-rajdhani font-semibold uppercase tracking-wider">
+              {showComments ? 'Hide' : 'Comments'}
+            </span>
+          </button>
         </div>
+
+        {showComments && (
+          <Comments
+            videoId={video.id}
+            videoTitle={video.title}
+            onAuthRequired={onAuthRequired}
+          />
+        )}
       </div>
-    </a>
+    </div>
   );
 }
 
-export default function VideoFeed() {
+interface VideoFeedProps {
+  onAuthRequired: () => void;
+}
+
+export default function VideoFeed({ onAuthRequired }: VideoFeedProps) {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [apiWorked, setApiWorked] = useState(false);
 
   useEffect(() => {
     const fetchVideos = async () => {
-      // YouTube Data API v3 - requires API key
-      // Replace 'YOUR_YOUTUBE_API_KEY' with an actual key to enable live fetching
       const API_KEY = (import.meta as { env?: { VITE_YOUTUBE_API_KEY?: string } }).env?.VITE_YOUTUBE_API_KEY || '';
       const CHANNEL_HANDLE = '@RAGEIntelYT';
 
+      // Get admin-added videos
+      const adminVideos = getAdminVideos();
+
       if (!API_KEY) {
-        // No API key — use fallback data
         setTimeout(() => {
-          setVideos(FALLBACK_VIDEOS);
+          // Merge admin videos with fallbacks (admin first, no duplicates)
+          const fallbackIds = new Set(adminVideos.map(v => v.id));
+          const merged = [...adminVideos, ...DEFAULT_FALLBACK_VIDEOS.filter(v => !fallbackIds.has(v.id))];
+          setVideos(merged);
           setLoading(false);
         }, 800);
         return;
       }
 
       try {
-        // Step 1: Get channel ID from handle
         const channelRes = await fetch(
-          `https://www.googleapis.com/youtube/v3/channels?part=id,snippet,contentDetails,statistics&forHandle=${CHANNEL_HANDLE}&key=${API_KEY}`
+          `https://www.googleapis.com/youtube/v3/channels?part=id,contentDetails&forHandle=${CHANNEL_HANDLE}&key=${API_KEY}`
         );
         const channelData = await channelRes.json();
+        const uploadsPlaylistId = channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+        if (!uploadsPlaylistId) throw new Error('No uploads playlist');
 
-        if (!channelData.items || channelData.items.length === 0) {
-          throw new Error('Channel not found');
-        }
-
-        const channel = channelData.items[0];
-        const uploadsPlaylistId = channel.contentDetails?.relatedPlaylists?.uploads;
-
-        if (!uploadsPlaylistId) throw new Error('Could not find uploads playlist');
-
-        // Step 2: Get latest videos from uploads playlist
         const playlistRes = await fetch(
           `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=12&key=${API_KEY}`
         );
         const playlistData = await playlistRes.json();
+        if (!playlistData.items?.length) throw new Error('No videos');
 
-        if (!playlistData.items || playlistData.items.length === 0) {
-          throw new Error('No videos found');
-        }
-
-        // Step 3: Get video details (views, duration)
         const videoIds = playlistData.items.map(
           (item: { snippet: { resourceId: { videoId: string } } }) => item.snippet.resourceId.videoId
         ).join(',');
@@ -253,23 +279,22 @@ export default function VideoFeed() {
             id: item.id,
             title: item.snippet.title,
             description: item.snippet.description,
-            thumbnail:
-              item.snippet.thumbnails?.maxres?.url ||
-              item.snippet.thumbnails?.high?.url ||
-              item.snippet.thumbnails?.medium?.url ||
-              `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
+            thumbnail: item.snippet.thumbnails?.maxres?.url || item.snippet.thumbnails?.high?.url || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
             publishedAt: item.snippet.publishedAt,
             viewCount: item.statistics?.viewCount,
             duration: formatDuration(item.contentDetails?.duration || ''),
           })
         );
 
-        setVideos(fetchedVideos);
+        // Merge admin + API (admin first, deduplicate)
+        const apiIds = new Set(fetchedVideos.map(v => v.id));
+        const merged = [...adminVideos.filter(v => !apiIds.has(v.id)), ...fetchedVideos];
+        setVideos(merged);
         setApiWorked(true);
-      } catch (err) {
-        console.warn('YouTube API failed, using fallback:', err);
-        setError('Using cached video data. Add VITE_YOUTUBE_API_KEY to enable live feed.');
-        setVideos(FALLBACK_VIDEOS);
+      } catch {
+        const adminIds = new Set(adminVideos.map(v => v.id));
+        const merged = [...adminVideos, ...DEFAULT_FALLBACK_VIDEOS.filter(v => !adminIds.has(v.id))];
+        setVideos(merged);
       } finally {
         setLoading(false);
       }
@@ -280,11 +305,9 @@ export default function VideoFeed() {
 
   return (
     <section id="videos" className="py-24 px-4 sm:px-6 bg-black relative">
-      {/* Top border accent */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-yellow-400/40 to-transparent" />
 
       <div className="max-w-7xl mx-auto">
-        {/* Section header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-6 mb-12">
           <div>
             <div className="inline-flex items-center gap-2 text-yellow-400 text-xs font-rajdhani font-semibold uppercase tracking-widest mb-3">
@@ -295,12 +318,9 @@ export default function VideoFeed() {
               Recent <span className="text-yellow-400">Videos</span>
             </h2>
             <p className="text-gray-400 font-inter text-sm mt-2 max-w-md">
-              {apiWorked
-                ? 'Live feed from @RAGEIntelYT — updated automatically'
-                : 'Fresh Rockstar intel, GTA 6 theories & more'}
+              {apiWorked ? 'Live feed from @RAGEIntelYT' : 'Fresh Rockstar intel, GTA 6 theories & more'}
             </p>
           </div>
-
           <a
             href="https://www.youtube.com/@RAGEIntelYT/videos"
             target="_blank"
@@ -314,14 +334,6 @@ export default function VideoFeed() {
           </a>
         </div>
 
-        {/* API Key notice */}
-        {error && (
-          <div className="mb-6 p-3 bg-yellow-400/10 border border-yellow-400/30 rounded text-yellow-400/80 text-xs font-inter">
-            ℹ️ {error}
-          </div>
-        )}
-
-        {/* Loading state */}
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -342,12 +354,12 @@ export default function VideoFeed() {
                 key={video.id}
                 video={video}
                 featured={index === 0}
+                onAuthRequired={onAuthRequired}
               />
             ))}
           </div>
         )}
 
-        {/* Bottom CTA */}
         <div className="mt-12 text-center">
           <a
             href="https://www.youtube.com/@RAGEIntelYT"
