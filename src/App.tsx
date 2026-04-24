@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import { AuthProvider } from './contexts/AuthContext';
+import AuthModal from './components/AuthModal';
+import AdminPanel from './components/AdminPanel';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import NewsTicker from './components/NewsTicker';
@@ -7,32 +11,44 @@ import Community from './components/Community';
 import Footer from './components/Footer';
 
 export default function App() {
+  const [showAuth, setShowAuth] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+
   return (
-    <div className="min-h-screen bg-black text-white overflow-x-hidden">
-      {/* Fixed Navigation */}
-      <Navbar />
+    <AuthProvider>
+      <div className="min-h-screen bg-black text-white overflow-x-hidden">
+        {/* تم تمرير وظائف فتح النوافذ للـ Navbar */}
+        <Navbar 
+          onOpenAuth={() => setShowAuth(true)} 
+          onOpenAdmin={() => setShowAdmin(true)} 
+        />
 
-      {/* Hero Section */}
-      <Hero />
+        {/* Hero Section */}
+        <Hero />
 
-      {/* Breaking News Ticker */}
-      <NewsTicker />
+        {/* Breaking News Ticker */}
+        <NewsTicker />
 
-      {/* Latest Videos */}
-      <VideoFeed />
+        {/* Latest Videos */}
+        <VideoFeed />
 
-      {/* About Section */}
-      <About />
+        {/* About Section */}
+        <About />
 
-      {/* Community Section */}
-      <Community />
+        {/* Community Section */}
+        <Community />
 
-      {/* Footer */}
-      <Footer />
+        {/* Footer */}
+        <Footer />
 
-      {/* Scroll to top button */}
-      <ScrollToTop />
-    </div>
+        {/* النوافذ المنبثقة (Modals) */}
+        {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+        {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
+
+        {/* زر العودة للأعلى */}
+        <ScrollToTop />
+      </div>
+    </AuthProvider>
   );
 }
 
@@ -52,11 +68,9 @@ function ScrollToTop() {
         fill="none"
         stroke="currentColor"
         strokeWidth={2.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="w-5 h-5 group-hover:scale-110 transition-transform duration-200"
+        className="w-5 h-5 group-hover:-translate-y-0.5 transition-transform duration-300"
       >
-        <path d="M18 15l-6-6-6 6" />
+        <path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </button>
   );
