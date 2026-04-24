@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
-export default function Navbar() {
+interface NavbarProps {
+  onOpenAuth: () => void;
+  onOpenAdmin: () => void;
+}
+
+export default function Navbar({ onOpenAuth, onOpenAdmin }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -29,91 +36,103 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <a href="#home" className="flex items-center gap-3 group">
-            <div className="relative">
-              <div className="w-9 h-9 bg-yellow-400 rounded-full flex items-center justify-center shadow-lg shadow-yellow-400/30 group-hover:shadow-yellow-400/60 transition-shadow duration-300">
-                <svg viewBox="0 0 24 24" fill="black" className="w-5 h-5">
-                  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-                </svg>
-              </div>
-              <div className="absolute inset-0 rounded-full bg-yellow-400 blur-md opacity-0 group-hover:opacity-40 transition-opacity duration-300" />
+            <div className="text-yellow-400 font-orbitron font-black text-xl tracking-tighter">
+              RAGE INTEL
             </div>
-            <span className="font-orbitron font-black text-white text-lg tracking-wider uppercase">
-              RAGE <span className="text-yellow-400">Intel</span>
-            </span>
           </a>
 
-          {/* Desktop Nav Links */}
+          {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
               <a
                 key={link.label}
                 href={link.href}
-                className="text-gray-300 hover:text-yellow-400 font-rajdhani font-semibold text-sm uppercase tracking-widest transition-colors duration-200 relative group"
+                className="text-gray-300 hover:text-yellow-400 font-rajdhani font-bold text-sm uppercase tracking-widest transition-colors duration-200"
               >
                 {link.label}
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-yellow-400 group-hover:w-full transition-all duration-300" />
               </a>
             ))}
+
+            {/* أزرار الحساب ولوحة التحكم */}
+            {user ? (
+              <div className="flex items-center gap-4">
+                {user.isAdmin && (
+                  <button 
+                    onClick={onOpenAdmin}
+                    className="bg-yellow-400 text-black px-4 py-1.5 rounded font-rajdhani font-bold text-xs uppercase hover:bg-yellow-300 transition-all"
+                  >
+                    Admin Panel
+                  </button>
+                )}
+                <span className="text-white font-rajdhani text-sm border-l border-zinc-700 pl-4">
+                  {user.username}
+                </span>
+                <button onClick={logout} className="text-red-500 font-rajdhani font-bold text-xs uppercase hover:text-red-400">
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={onOpenAuth}
+                className="bg-zinc-900 border border-zinc-700 text-white px-5 py-2 rounded font-rajdhani font-bold text-xs uppercase hover:border-yellow-400 transition-all"
+              >
+                Sign In
+              </button>
+            )}
           </div>
 
-          {/* CTA Button */}
-          <div className="hidden md:flex items-center gap-4">
-            <a
-              href="https://www.youtube.com/@RAGEIntelYT"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded font-rajdhani font-bold text-sm uppercase tracking-wider transition-all duration-200 shadow-lg shadow-red-600/30 hover:shadow-red-500/50"
+          {/* Mobile Menu Button */}
+          <div className="md:hidden">
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="text-gray-300 hover:text-yellow-400 p-2"
             >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                {menuOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                )}
               </svg>
-              Subscribe
-            </a>
+            </button>
           </div>
-
-          {/* Mobile Hamburger */}
-          <button
-            className="md:hidden text-gray-300 hover:text-yellow-400 transition-colors"
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Toggle menu"
-          >
-            <div className="w-6 h-5 flex flex-col justify-between">
-              <span className={`block h-0.5 bg-current transition-all duration-300 ${menuOpen ? 'rotate-45 translate-y-2' : ''}`} />
-              <span className={`block h-0.5 bg-current transition-all duration-300 ${menuOpen ? 'opacity-0' : ''}`} />
-              <span className={`block h-0.5 bg-current transition-all duration-300 ${menuOpen ? '-rotate-45 -translate-y-2' : ''}`} />
-            </div>
-          </button>
         </div>
       </div>
 
       {/* Mobile Menu */}
       <div
-        className={`md:hidden transition-all duration-300 overflow-hidden ${
-          menuOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0'
-        } bg-black/95 backdrop-blur-md border-b border-yellow-400/20`}
+        className={`md:hidden transition-all duration-300 ease-in-out ${
+          menuOpen ? 'max-h-screen opacity-100 border-b border-yellow-400/20' : 'max-h-0 opacity-0 overflow-hidden'
+        } bg-black/95 backdrop-blur-md`}
       >
-        <div className="px-6 py-4 flex flex-col gap-4">
+        <div className="px-6 py-6 flex flex-col gap-6">
           {navLinks.map((link) => (
             <a
               key={link.label}
               href={link.href}
               onClick={() => setMenuOpen(false)}
-              className="text-gray-300 hover:text-yellow-400 font-rajdhani font-semibold text-sm uppercase tracking-widest transition-colors duration-200"
+              className="text-gray-300 hover:text-yellow-400 font-rajdhani font-bold text-lg uppercase tracking-widest"
             >
               {link.label}
             </a>
           ))}
-          <a
-            href="https://www.youtube.com/@RAGEIntelYT"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 rounded font-rajdhani font-bold text-sm uppercase tracking-wider transition-all duration-200 mt-2"
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-              <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-            </svg>
-            Subscribe on YouTube
-          </a>
+          <div className="pt-4 border-t border-zinc-800">
+            {user ? (
+              <div className="flex flex-col gap-4">
+                <span className="text-yellow-400 font-rajdhani font-bold">User: {user.username}</span>
+                {user.isAdmin && (
+                  <button onClick={() => { onOpenAdmin(); setMenuOpen(false); }} className="bg-yellow-400 text-black p-2 rounded font-bold uppercase text-sm">
+                    Admin Panel
+                  </button>
+                )}
+                <button onClick={logout} className="text-red-500 text-left font-bold uppercase text-sm">Logout</button>
+              </div>
+            ) : (
+              <button onClick={() => { onOpenAuth(); setMenuOpen(false); }} className="w-full bg-yellow-400 text-black p-3 rounded font-bold uppercase text-sm">
+                Sign In / Sign Up
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </nav>
