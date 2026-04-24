@@ -1,3 +1,4 @@
+// 1. src/contexts/AuthContext.tsx
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 export type RolePermissions = {
@@ -13,7 +14,7 @@ export interface AdminRole {
   id: string;
   name: string;
   tag: string;
-  color: string; // tailwind color class or hex
+  color: string;
   permissions: RolePermissions;
 }
 
@@ -21,28 +22,32 @@ export interface User {
   username: string;
   email: string;
   isAdmin: boolean;
-  roleId?: string; // references AdminRole.id
+  roleId?: string;
   joinedAt: string;
-  avatar?: string; // base64 or url
+  avatar?: string;
   banned?: boolean;
-  bannedUntil?: string | null; // ISO or null = permanent
+  bannedUntil?: string | null;
   banReason?: string;
 }
 
-interface StoredUser extends User {
-  passwordHash: string;
-}
+interface StoredUser extends User { passwordHash: string; }
 
 interface AuthContextType {
   user: User | null;
-  login: (usernameOrEmail: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (u: string, p: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (u: string, e: string, p: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  changePassword: (oldPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
-  updateAvatar: (base64: string) => void;
+  changePassword: (o: string, n: string) => Promise<{ success: boolean; error?: string }>;
+  updateAvatar: (b64: string) => void;
   isAuthenticated: boolean;
-  getRole: (roleId?: string) => AdminRole | null;
-  hasPermission: (permission: keyof RolePermissions) => boolean;
+  getRole: (id?: string) => AdminRole | null;
+  hasPermission: (p: keyof RolePermissions) => boolean;
+  getStoredRoles: () => AdminRole[];
+  saveRoles: (roles: AdminRole[]) => void;
+  getStoredUsers: () => User[];
+  updateUserAdminStatus: (username: string, roleId: string | null) => void;
+  banUser: (username: string, until: string | null, reason: string) => void;
+  unbanUser: (username: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -51,217 +56,129 @@ const ADMIN_USERNAME = 'RageIntel';
 const ADMIN_PASSWORD = 'V1c3C1ty@R@G3#2026!';
 
 const OWNER_ROLE: AdminRole = {
-  id: 'owner',
-  name: 'Owner',
-  tag: 'OWNER',
-  color: '#facc15',
-  permissions: {
-    canManageVideos: true,
-    canManageTicker: true,
-    canDeleteComments: true,
-    canBanUsers: true,
-    canManageAdmins: true,
-    canEditDefaults: true,
-  },
+  id: 'owner', name: 'Owner', tag: 'OWNER', color: '#facc15',
+  permissions: { canManageVideos: true, canManageTicker: true, canDeleteComments: true, canBanUsers: true, canManageAdmins: true, canEditDefaults: true }
 };
 
-function hashish(str: string): string {
-  return btoa(str + '::rageintel_salt_2026');
-}
+const DEFAULT_HEADLINES = [
+  '🔥 GTA 6 Trailer 3 rumored for Spring 2026',
+  '⚡ New GTA 6 map leaks surface — Vice City confirmed',
+  '🎮 Rockstar Games hints at revolutionary online mode'
+];
 
-export function getStoredRoles(): AdminRole[] {
-  try {
-    const r = localStorage.getItem('rageintel_roles');
-    return r ? JSON.parse(r) : [OWNER_ROLE];
-  } catch { return [OWNER_ROLE]; }
-}
+const DEFAULT_VIDEOS = [
+  { id: 'dQw4w9WgXcQ', title: 'My Final Predictions for GTA 6 Trailer 3', description: 'Breaking down evidence.', thumbnail: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg', publishedAt: new Date().toISOString() }
+];
 
-export function saveRoles(roles: AdminRole[]) {
-  localStorage.setItem('rageintel_roles', JSON.stringify(roles));
-}
+function hashish(str: string) { return btoa(str + '::rageintel_salt_2026'); }
+function getRawUsers(): StoredUser[] { try { return JSON.parse(localStorage.getItem('rageintel_users') || '[]'); } catch { return []; } }
+function saveRawUsers(u: StoredUser[]) { localStorage.setItem('rageintel_users', JSON.stringify(u)); }
 
-export function getStoredUsers(): StoredUser[] {
-  try {
-    return JSON.parse(localStorage.getItem('rageintel_users') || '[]');
-  } catch { return []; }
-}
-
-export function saveStoredUsers(users: StoredUser[]) {
-  localStorage.setItem('rageintel_users', JSON.stringify(users));
-}
-
-function isBanned(u: User): boolean {
-  if (!u.banned) return false;
-  if (!u.bannedUntil) return true; // permanent
-  return new Date(u.bannedUntil) > new Date();
+function initializeDefaults() {
+  if (!localStorage.getItem('rageintel_init')) {
+    localStorage.setItem('rageintel_ticker', JSON.stringify(DEFAULT_HEADLINES));
+    localStorage.setItem('rageintel_videos', JSON.stringify(DEFAULT_VIDEOS));
+    localStorage.setItem('rageintel_init', 'true');
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    initializeDefaults();
     const stored = localStorage.getItem('rageintel_user');
     if (stored) {
       try {
-        const parsed: User = JSON.parse(stored);
-        // Refresh ban status from users list
-        if (!parsed.isAdmin || parsed.username !== ADMIN_USERNAME) {
-          const users = getStoredUsers();
-          const found = users.find(u => u.username === parsed.username);
-          if (found && isBanned(found)) {
-            localStorage.removeItem('rageintel_user');
-            return;
+        const parsed = JSON.parse(stored);
+        if (parsed.username !== ADMIN_USERNAME) {
+          const found = getRawUsers().find(u => u.username === parsed.username);
+          if (found && found.banned && (!found.bannedUntil || new Date(found.bannedUntil) > new Date())) {
+            localStorage.removeItem('rageintel_user'); return;
           }
           if (found) {
-            const refreshed = { ...parsed, avatar: found.avatar, banned: found.banned, bannedUntil: found.bannedUntil };
-            setUser(refreshed);
-            localStorage.setItem('rageintel_user', JSON.stringify(refreshed));
+            setUser({ ...parsed, avatar: found.avatar, isAdmin: found.isAdmin, roleId: found.roleId });
             return;
           }
         }
         setUser(parsed);
-      } catch {
-        localStorage.removeItem('rageintel_user');
-      }
+      } catch { localStorage.removeItem('rageintel_user'); }
     }
   }, []);
 
-  const getRole = (roleId?: string): AdminRole | null => {
-    if (!roleId) return null;
-    const roles = getStoredRoles();
-    return roles.find(r => r.id === roleId) || null;
+  const getStoredRoles = (): AdminRole[] => {
+    try { const r = localStorage.getItem('rageintel_roles'); return r ? JSON.parse(r) : [OWNER_ROLE]; } catch { return [OWNER_ROLE]; }
   };
+  const saveRoles = (roles: AdminRole[]) => localStorage.setItem('rageintel_roles', JSON.stringify(roles));
+  const getRole = (id?: string) => id ? getStoredRoles().find(r => r.id === id) || null : null;
+  const getStoredUsers = () => getRawUsers().map(u => ({ ...u, passwordHash: '' }));
 
-  const hasPermission = (permission: keyof RolePermissions): boolean => {
+  const hasPermission = (p: keyof RolePermissions) => {
     if (!user?.isAdmin) return false;
-    if (user.username === ADMIN_USERNAME && (!user.roleId || user.roleId === 'owner')) return true;
-    const role = getRole(user.roleId);
-    return role?.permissions[permission] ?? false;
+    if (user.username === ADMIN_USERNAME) return true;
+    return getRole(user.roleId)?.permissions[p] ?? false;
   };
 
-  const login = async (usernameOrEmail: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    await new Promise(r => setTimeout(r, 500));
-
-    if (usernameOrEmail === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      const adminUser: User = {
-        username: ADMIN_USERNAME,
-        email: 'admin@rageintel.com',
-        isAdmin: true,
-        roleId: 'owner',
-        joinedAt: '2026-03-01T00:00:00Z',
-      };
-      setUser(adminUser);
-      localStorage.setItem('rageintel_user', JSON.stringify(adminUser));
-      return { success: true };
+  const login = async (u: string, p: string) => {
+    if (u === ADMIN_USERNAME && p === (localStorage.getItem('rageintel_owner_pw') ? atob(localStorage.getItem('rageintel_owner_pw')!) : ADMIN_PASSWORD)) {
+      const adminUser: User = { username: ADMIN_USERNAME, email: 'admin@rageintel.com', isAdmin: true, roleId: 'owner', joinedAt: new Date().toISOString() };
+      setUser(adminUser); localStorage.setItem('rageintel_user', JSON.stringify(adminUser)); return { success: true };
     }
-
-    const users = getStoredUsers();
-    const found = users.find(
-      u => (u.username.toLowerCase() === usernameOrEmail.toLowerCase() ||
-            u.email.toLowerCase() === usernameOrEmail.toLowerCase()) &&
-           u.passwordHash === hashish(password)
-    );
-
-    if (!found) return { success: false, error: 'Invalid username/email or password.' };
-
-    if (isBanned(found)) {
-      const msg = found.bannedUntil
-        ? `You are banned until ${new Date(found.bannedUntil).toLocaleDateString()}.${found.banReason ? ' Reason: ' + found.banReason : ''}`
-        : `You are permanently banned.${found.banReason ? ' Reason: ' + found.banReason : ''}`;
-      return { success: false, error: msg };
-    }
-
-    const loggedIn: User = {
-      username: found.username,
-      email: found.email,
-      isAdmin: found.isAdmin || false,
-      roleId: found.roleId,
-      joinedAt: found.joinedAt,
-      avatar: found.avatar,
-    };
-    setUser(loggedIn);
-    localStorage.setItem('rageintel_user', JSON.stringify(loggedIn));
-    return { success: true };
+    const found = getRawUsers().find(x => (x.username.toLowerCase() === u.toLowerCase() || x.email.toLowerCase() === u.toLowerCase()) && x.passwordHash === hashish(p));
+    if (!found) return { success: false, error: 'Invalid credentials.' };
+    if (found.banned && (!found.bannedUntil || new Date(found.bannedUntil) > new Date())) return { success: false, error: `Banned: ${found.banReason || 'No reason'}` };
+    
+    const loggedIn = { username: found.username, email: found.email, isAdmin: found.isAdmin, roleId: found.roleId, joinedAt: found.joinedAt, avatar: found.avatar };
+    setUser(loggedIn); localStorage.setItem('rageintel_user', JSON.stringify(loggedIn)); return { success: true };
   };
 
-  const signup = async (username: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    await new Promise(r => setTimeout(r, 500));
-
-    if (username.toLowerCase() === 'rageintel') return { success: false, error: 'That username is reserved.' };
-    if (password.length < 8) return { success: false, error: 'Password must be at least 8 characters.' };
-
-    const users = getStoredUsers();
-    if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) return { success: false, error: 'Username already taken.' };
-    if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) return { success: false, error: 'Email already registered.' };
-
-    const newUser: StoredUser = {
-      username, email,
-      passwordHash: hashish(password),
-      isAdmin: false,
-      joinedAt: new Date().toISOString(),
-    };
-    users.push(newUser);
-    saveStoredUsers(users);
-
-    const loggedIn: User = { username, email, isAdmin: false, joinedAt: newUser.joinedAt };
-    setUser(loggedIn);
-    localStorage.setItem('rageintel_user', JSON.stringify(loggedIn));
-    return { success: true };
+  const signup = async (u: string, e: string, p: string) => {
+    if (u.toLowerCase() === 'rageintel') return { success: false, error: 'Reserved username.' };
+    const users = getRawUsers();
+    if (users.find(x => x.username.toLowerCase() === u.toLowerCase() || x.email.toLowerCase() === e.toLowerCase())) return { success: false, error: 'Username or email taken.' };
+    const newUser: StoredUser = { username: u, email: e, passwordHash: hashish(p), isAdmin: false, joinedAt: new Date().toISOString() };
+    users.push(newUser); saveRawUsers(users);
+    const loggedIn = { username: u, email: e, isAdmin: false, joinedAt: newUser.joinedAt };
+    setUser(loggedIn); localStorage.setItem('rageintel_user', JSON.stringify(loggedIn)); return { success: true };
   };
 
-  const changePassword = async (oldPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
-    await new Promise(r => setTimeout(r, 400));
+  const changePassword = async (o: string, n: string) => {
     if (!user) return { success: false, error: 'Not logged in.' };
-    if (newPassword.length < 8) return { success: false, error: 'New password must be at least 8 characters.' };
-
-    // Owner
     if (user.username === ADMIN_USERNAME) {
-      // We can't actually change the hardcoded password, but for demo we store an override
-      if (oldPassword !== ADMIN_PASSWORD) {
-        const override = localStorage.getItem('rageintel_owner_pw');
-        if (!override || hashish(oldPassword) !== override) return { success: false, error: 'Incorrect current password.' };
-      }
-      localStorage.setItem('rageintel_owner_pw', hashish(newPassword));
-      return { success: true };
+      if (o !== (localStorage.getItem('rageintel_owner_pw') ? atob(localStorage.getItem('rageintel_owner_pw')!) : ADMIN_PASSWORD)) return { success: false, error: 'Wrong password.' };
+      localStorage.setItem('rageintel_owner_pw', btoa(n)); return { success: true };
     }
-
-    const users = getStoredUsers();
-    const idx = users.findIndex(u => u.username === user.username);
-    if (idx === -1) return { success: false, error: 'User not found.' };
-    if (users[idx].passwordHash !== hashish(oldPassword)) return { success: false, error: 'Incorrect current password.' };
-
-    users[idx].passwordHash = hashish(newPassword);
-    saveStoredUsers(users);
-    return { success: true };
+    const users = getRawUsers();
+    const idx = users.findIndex(x => x.username === user.username);
+    if (users[idx].passwordHash !== hashish(o)) return { success: false, error: 'Wrong password.' };
+    users[idx].passwordHash = hashish(n); saveRawUsers(users); return { success: true };
   };
 
-  const updateAvatar = (base64: string) => {
+  const updateAvatar = (b64: string) => {
     if (!user) return;
-    const updated = { ...user, avatar: base64 };
-    setUser(updated);
-    localStorage.setItem('rageintel_user', JSON.stringify(updated));
-
-    if (user.username !== ADMIN_USERNAME) {
-      const users = getStoredUsers();
-      const idx = users.findIndex(u => u.username === user.username);
-      if (idx !== -1) { users[idx].avatar = base64; saveStoredUsers(users); }
-    }
+    const upd = { ...user, avatar: b64 }; setUser(upd); localStorage.setItem('rageintel_user', JSON.stringify(upd));
+    const users = getRawUsers(); const idx = users.findIndex(x => x.username === user.username);
+    if (idx !== -1) { users[idx].avatar = b64; saveRawUsers(users); }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('rageintel_user');
+  const updateUserAdminStatus = (username: string, roleId: string | null) => {
+    const users = getRawUsers(); const idx = users.findIndex(u => u.username === username);
+    if (idx !== -1) { users[idx].isAdmin = !!roleId; users[idx].roleId = roleId || undefined; saveRawUsers(users); }
   };
 
-  return (
-    <AuthContext.Provider value={{ user, login, signup, logout, changePassword, updateAvatar, isAuthenticated: !!user, getRole, hasPermission }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const banUser = (username: string, until: string | null, reason: string) => {
+    const users = getRawUsers(); const idx = users.findIndex(u => u.username === username);
+    if (idx !== -1) { users[idx].banned = true; users[idx].bannedUntil = until; users[idx].banReason = reason; saveRawUsers(users); }
+  };
+
+  const unbanUser = (username: string) => {
+    const users = getRawUsers(); const idx = users.findIndex(u => u.username === username);
+    if (idx !== -1) { users[idx].banned = false; users[idx].bannedUntil = null; users[idx].banReason = ''; saveRawUsers(users); }
+  };
+
+  const logout = () => { setUser(null); localStorage.removeItem('rageintel_user'); };
+
+  return <AuthContext.Provider value={{ user, login, signup, logout, changePassword, updateAvatar, isAuthenticated: !!user, getRole, hasPermission, getStoredRoles, saveRoles, getStoredUsers, updateUserAdminStatus, banUser, unbanUser }}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be inside AuthProvider');
-  return ctx;
-}
+export const useAuth = () => { const ctx = useContext(AuthContext); if (!ctx) throw new Error('Error'); return ctx; };
